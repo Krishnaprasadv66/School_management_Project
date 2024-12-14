@@ -1,6 +1,6 @@
 # serializers.py
 from rest_framework import serializers
-from School.models import User, LibraryHistory, FeesHistory,Student
+from School.models import User, LibraryHistory, FeesHistory,Student, LibraryReview
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -56,3 +56,9 @@ class UserSerializer(serializers.ModelSerializer):
         user.set_password(password)  # Hash the password before saving
         user.save()
         return user
+    
+
+class LibraryReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LibraryReview
+        fields = ['id', 'student', 'book', 'rating', 'comment', 'created_at']

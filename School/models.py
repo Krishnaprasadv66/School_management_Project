@@ -102,6 +102,9 @@ class LibraryHistory(models.Model):
     status = models.CharField(max_length=20, choices=[('borrowed', 'Borrowed'), ('returned', 'Returned')])
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return f"library history of {self.student} "
+
 
 # FeesHistory
 class FeesHistory(models.Model):
@@ -110,3 +113,27 @@ class FeesHistory(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_date = models.DateField()
     remarks = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"library history of {self.student} "
+
+
+
+class LibraryReview(models.Model):
+
+    RATING_CHOICES = [
+        (1, '1 Star'),
+        (2, '2 Stars'),
+        (3, '3 Stars'),
+        (4, '4 Stars'),
+        (5, '5 Stars'),
+    ]
+
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)  
+    book = models.CharField(max_length=200)
+    rating = models.IntegerField(choices=RATING_CHOICES) 
+    comment = models.TextField(blank=True, null=True)  
+    created_at = models.DateTimeField(auto_now_add=True)  
+
+    def __str__(self):
+        return f"Review of '{self.book}' by {self.student.first_name} ({self.rating}/5)"

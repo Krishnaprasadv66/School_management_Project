@@ -2,12 +2,12 @@
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from School.models import LibraryHistory, FeesHistory, Student, User
+from School.models import LibraryHistory, FeesHistory, Student, User, LibraryReview
 from School.serializers import  UserLoginSerializer 
-from .serializers import FeesHistorySerializer, LibraryHistorySerializer, StudentSerializer, UserSerializer
+from .serializers import FeesHistorySerializer, LibraryHistorySerializer, StudentSerializer, UserSerializer, LibraryReviewSerializer
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
-from School.permissions import IsAdminUser, IsLibrarianReadonlyUser
+from School.permissions import IsAdminUser, IsLibrarianReadonlyUser, IsAdminOrReadOnly
 
 
 
@@ -254,13 +254,20 @@ class UserListView(APIView):
     permission_classes = [IsAdminUser]  
 
     def get(self, request):
-        """ List all users (office staff and librarian), with optional full_name search """
-        full_name = request.query_params.get('full_name', None)  # Get full_name query param (optional)
+        """ List all users (office staff and librarian), with optional full_name and role filters """
+        
+        # Get query parameters for full_name and role
+        full_name = request.query_params.get('full_name', None)
+        role = request.query_params.get('role', None)  # Get the role query param (optional)
+
+        # Filter by role and full_name if provided
+        users = User.objects.filter(role__in=['office_staff', 'librarian'])
 
         if full_name:
-            users = User.objects.filter(role__in=['office_staff', 'librarian'], full_name__icontains=full_name)
-        else:
-            users = User.objects.filter(role__in=['office_staff', 'librarian'])
+            users = users.filter(full_name__icontains=full_name)
+        
+        if role:
+            users = users.filter(role=role)  # Apply the role filter
 
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -320,3 +327,87 @@ class UserDetailView(APIView):
         user.delete()
         return Response({"message": f"User {user.full_name} has been deleted successfully."},
                         status=status.HTTP_204_NO_CONTENT)
+    
+
+
+
+# LIBRARY RIVIEW
+
+class LibraryReviewListView(APIView):
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get(self, request):
+        """ List all reviews """
+        reviews = LibraryReview.objects.all()
+        serializer = LibraryReviewSerializer(reviews, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """ Create a new review (only admin can post) """
+        serializer = LibraryReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()  # Admins can create reviews
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+class LibraryReviewDetailView(APIView):
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_object(self, id):
+        """ Helper method to get a review by ID """
+        try:
+            return LibraryReview.objects.get(id=id)
+        except LibraryReview.DoesNotExist:
+            return None
+
+    def get(self, request):
+        """ Get details of a specific review (id passed in body) """
+        id = request.data.get('id')  # Retrieve id from the request body
+        if not id:
+            return Response({"error": "'id' is required in the body."}, status=status.HTTP_400_BAD_REQUEST)
+
+        review = self.get_object(id)
+        if review is None:
+            return Response({"error": "Review not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = LibraryReviewSerializer(review)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        """ Update a specific review (id passed in body, only admin can update) """
+        id = request.data.get('id')
+        if not id:
+            return Response({"error": "'id' is required to update the details."}, status=status.HTTP_400_BAD_REQUEST)
+
+        review = self.get_object(id)
+        if review is None:
+            return Response({"error": "Review not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Update the review using the request data (partial update allowed)
+        serializer = LibraryReviewSerializer(review, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        """ Delete a specific review (id and confirmation flag passed in body) """
+        id = request.data.get('id')
+        confirm = request.data.get('confirm', False)  # Confirmation flag
+
+        if not id:
+            return Response({"error": "'id' is required in the body."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not confirm:
+            return Response({"error": "Please confirm deletion by setting 'confirm' to true in the request body."}, 
+                             status=status.HTTP_400_BAD_REQUEST)
+
+        review = self.get_object(id)
+        if review is None:
+            return Response({"error": "Review not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Perform the deletion
+        review.delete()
+        return Response({"message": "Review deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
